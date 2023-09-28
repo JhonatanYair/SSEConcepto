@@ -1,0 +1,79 @@
+version: '3.9'
+services:
+
+  rabbitmq:
+    image: "rabbitmq:3.12-management"
+    command: rabbitmq-server
+    hostname: "rabbitmq"
+    labels:
+      NAME: "rabbitmq"
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD}
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      mynetwork: # Asigna el contenedor a una red personalizada
+        ipv4_address: 172.20.0.2 # Configura la dirección IP específica para el contenedor
+
+  clientesse:
+    image: nginx:latest
+    ports:
+      - "8082:80"
+    environment:
+      - URL_SSE=http://localhost:8081//SSEHub
+    volumes:
+      - ./ClienteSSE:/usr/share/nginx/html
+    networks:
+      mynetwork: # Asigna el contenedor a la misma red personalizada
+        ipv4_address: 172.20.0.3 # Configura una dirección IP específica para este contenedor
+
+  producermessage:
+    build:
+      context: .
+      dockerfile: ./ProducerMessage/Dockerfile
+    ports:
+      - "8080:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT}
+      - RABBITMQ_HOST=${RABBITMQ_HOST}
+      - RABBITMQ_USER=${RABBITMQ_USER}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
+    depends_on:
+       rabbitmq:
+        condition: service_healthy
+    networks:
+      mynetwork: # Asigna el contenedor a la misma red personalizada
+        ipv4_address: 172.20.0.4 # Configura una dirección IP específica para este contenedor
+
+  serversignal:
+    build:
+      context: .
+      dockerfile: ./ServerSignal/Dockerfile
+    ports:
+      - "5140:80"
+    environment:
+      - URL_SIGNAL_HUB=${URL_SIGNAL_HUB}
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT}
+      - RABBITMQ_HOST=${RABBITMQ_HOST}
+      - RABBITMQ_USER=${RABBITMQ_USER}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
+    depends_on:
+       rabbitmq:
+        condition: service_healthy
+    networks:
+      mynetwork: # Asigna el contenedor a la misma red personalizada
+        ipv4_address: 172.20.0.5 # Configura una dirección IP específica para este contenedor
+
+networks:
+  mynetwork:
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/16 # Define la subred para la red personalizada

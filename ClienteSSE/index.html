@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Cliente SSE</title>
+</head>
+<body>
+    <div><b>Abre la consola</b></div><br>
+    <div><b>Guardar mensajes en rabbitmq, desde el web api ProducerMessage</b></div><br>
+
+    <div id="sse-data"></div>
+
+    <!-- Es importante importar este script de signalr -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/3.1.11/signalr.min.js"></script>
+
+    <script>
+
+        const sseData = document.getElementById('sse-data');
+        //Aca colocas el exchange al cual deseas suscribirte
+        const exchange = "CompanyService";
+        //Exchange disponibles
+        //CompanyService 
+        //ReportService
+
+        const connection = new signalR.HubConnectionBuilder()
+            .withUrl('http://localhost:5140/SSEHub')
+            .build();
+
+        connection.start()
+            .then(() => {                       
+                connection.invoke("JoinGroup", exchange).catch((err) => console.error(err));
+                connection.invoke("SubsMessageToGroupExchange", exchange).catch((err) => console.error(err));
+                console.log('Conexión establecida.');
+                
+                connection.on('ReceiveMessageGroup', function (eventData) {
+                    sseData.innerHTML += eventData + '<br>';
+                });
+            })
+            .catch(error => {
+                console.error('Error al conectar:', error);
+            });
+    </script>
+</body>
+</html>
