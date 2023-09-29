@@ -11,7 +11,11 @@ namespace Queues.AbstracionLayer.Enums
 
         ReportService,
         CompanyService,
-        SessionService
+        SessionService,
+        ProjectService,
+        PackageService,
+        JobService,
+        UserService
 
     }
 }

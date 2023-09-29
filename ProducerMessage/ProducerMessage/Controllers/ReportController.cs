@@ -26,11 +26,11 @@ namespace ProducerMessage.Controllers
 
             PayloadDTO messageSave = new PayloadDTO()
             {
-                From = "ProduccerMessage",
+                from = "ProduccerMessage",
                 tracking = Guid.NewGuid(),
-                EventType = EventTypes.report_new,
-                Exchange = ExchangeTypes.ReportService,
-                Data = dataJson
+                eventType = EventTypes.report_new,
+                exchange = ExchangeTypes.ReportService,
+                data = dataJson
             };
 
             _queueService.PublishMessage(Queues.AbstracionLayer.Enums.ExchangeTypes.ReportService,messageSave);   
@@ -48,12 +48,12 @@ namespace ProducerMessage.Controllers
 
             PayloadDTO messageSave = new PayloadDTO()
             {
-                From = "ProduccerMessage",
+                from = "ProduccerMessage",
                 tracking = Guid.NewGuid(),
-                EventType = EventTypes.report_new,
-                Exchange = ExchangeTypes.ReportService,
-                To = $"{idUser}",
-                Data = dataJson
+                eventType = EventTypes.report_new,
+                exchange = ExchangeTypes.ReportService,
+                to = $"{idUser}",
+                data = dataJson
             };
 
             _queueService.PublishMessage(Queues.AbstracionLayer.Enums.ExchangeTypes.ReportService, messageSave);

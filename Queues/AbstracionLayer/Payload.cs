@@ -6,24 +6,25 @@ namespace Queues.AbstracionLayer
 {
     public class Payload
     {
-        public int Event_id { get; set; }
+        public int event_id { get; set; }
         public Guid tracking { get; set; }
-        public string From { get; set; }
-        public string? To { get; set; }
-        public string EventType { get; set; }
-        public string Exchange { get; set; }
-        public DateTime? DateCreate { get; set; }
-        public JObject Data { get; set; }
+        public string from { get; set; }
+        public string? to { get; set; }
+        public string eventType { get; set; }
+        public string exchange { get; set; }
+        public DateTime? creationDate { get; set; }
+        public JObject data { get; set; }
     }
 
     public class PayloadDTO
     {
         public Guid tracking { get; set; }
-        public string From { get; set; }
-        public string? To { get; set; }
-        public EventTypes EventType { get; set; }
-        public ExchangeTypes Exchange { get; set; }
-        public JObject Data { get; set; }
+        public string from { get; set; }
+        public string? to { get; set; } = "";
+        public EventTypes eventType { get; set; }
+        public ExchangeTypes exchange { get; set; }
+        public JObject data { get; set; }
+
     }
 
 }

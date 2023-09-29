@@ -4,34 +4,67 @@ using Queues.AbstracionLayer;
 using Queues.AbstracionLayer.Enums;
 using System.Linq;
 
-
 namespace ServerSignal.Hubs;
 
 public class SSEHub : Hub
 {
     private readonly QueueServiceBase queueService;
-
+    private readonly NotificationSignal.NotificationSignal notificationSignal;
     private Dictionary<string, Action<object, string>> messageGropusReceivedHandlers = new Dictionary<string, Action<object, string>>();
-    private List<ExchangeEventSSE> ExchangesPrivates = new List<ExchangeEventSSE>();
-    private List<ExchangeEventSSE> Exchanges = new List<ExchangeEventSSE>();
+    private List<ConsumeEventSSE> exchangesPrivate = new List<ConsumeEventSSE>();
+    private List<ConsumeEventSSE> exchanges = new List<ConsumeEventSSE>();
 
     public SSEHub(QueueServiceBase _queueService)
     {
         queueService= _queueService;
+        notificationSignal = new NotificationSignal.NotificationSignal();
+    }
+
+    public override async Task OnConnectedAsync()
+    {
+        await base.OnConnectedAsync();
     }
 
     public override async Task OnDisconnectedAsync(Exception exception)
     {
-        Console.WriteLine();
-        Console.WriteLine(Context.ConnectionId);
-        Console.WriteLine();
+        await UnsubscribeClient(Context.ConnectionId);
         await base.OnDisconnectedAsync(exception);
     }
 
-
-    public async Task UnsubscribeUser(string userId)
+    public async Task UnsubscribeClient(string connectionID)
     {
+        var indexExcPriva = exchangesPrivate.FirstOrDefault(Exchange => Exchange.ConnetionID == connectionID);
+        if (indexExcPriva != null)
+        {
+            foreach (var eventS in indexExcPriva.ExchangeEvents)
+            {
+                queueService.UnsubscribeFromMessage(eventS.EventMessage,eventS.QueueName);
+            }
+            exchangesPrivate.Remove(indexExcPriva);
+        }
 
+        var indexExchanges = exchanges.FirstOrDefault(Exchange => Exchange.ConnetionID == connectionID);
+        if (indexExchanges != null)
+        {
+            var listGroups = indexExchanges.GroupNames;
+            exchanges.Remove(indexExchanges);
+            await UnsubscribeGroup(listGroups);
+        }
+
+    }
+
+    public async Task UnsubscribeGroup(List<string> listGroupNames)
+    {
+        foreach (var groupName in listGroupNames)
+        {
+            bool existEvent = exchanges.Any(Exchange => Exchange.GroupNames.Contains(groupName));
+            if (existEvent == false)
+            {
+                var eventGroup = messageGropusReceivedHandlers[groupName];
+                queueService.UnsubscribeFromMessage(eventGroup, groupName);
+                messageGropusReceivedHandlers.Remove(groupName);
+            }
+        }
     }
 
     public async Task SendMessage(string mensaje)
@@ -82,39 +115,39 @@ public class SSEHub : Hub
         await Clients.Group(nameGroup).SendAsync("ReceiveMessagePrivExchange", message);
     }
 
-    public ExchangeEventSSE ExchangeExist(string ConnectionId, string groupName)
+    public ConsumeEventSSE ExchangeExist(string ConnectionId, string groupName)
     {
-        var ExchangeIndex = Exchanges.FirstOrDefault(Exchanges => Exchanges.ConnetionID == ConnectionId && Exchanges.GroupNames.Contains(groupName));
-        if (ExchangeIndex == null)
+        var exchangeIndex = exchanges.FirstOrDefault(Exchanges => Exchanges.ConnetionID == ConnectionId);
+        if (exchangeIndex == null)
         {
-            Exchanges.Add(
-                new ExchangeEventSSE
+             exchanges.Add(
+                new ConsumeEventSSE
                 {
                     ConnetionID = Context.ConnectionId,
                     GroupNames = new List<string> { groupName },
                 }
             );
-            ExchangeIndex = Exchanges[Exchanges.Count - 1];
+            exchangeIndex = exchanges[exchanges.Count - 1];
         }
-        else
+        else if(!exchangeIndex.GroupNames.Contains(groupName))
         {
-            ExchangeIndex.GroupNames.Add(groupName);
+            exchangeIndex.GroupNames.Add(groupName);
         }
-        return ExchangeIndex;
+        return exchangeIndex;
     }
 
-    public bool ExchangeExistUser(string userId)
+    public bool ExchangeExistPrivate(string userId)
     {
-        bool boolExist = ExchangesPrivates.Exists(Exchanges => Exchanges.UserID == userId);
+        bool boolExist = exchangesPrivate.Exists(Exchanges => Exchanges.UserID == userId);
         if (boolExist == false)
         {
-            ExchangesPrivates.Add(
-                new ExchangeEventSSE
+            exchangesPrivate.Add(
+                new ConsumeEventSSE
                 {
                     ConnetionID = Context.ConnectionId,
                     UserID = userId,
                     GroupNames = new List<string> { },
-                    ExchangeEvents = new List<Action<object, string>> { },
+                    ExchangeEvents = new List<ConsumeEvent> { },
                 }
             );
         }
@@ -123,32 +156,33 @@ public class SSEHub : Hub
 
     public async Task SubsPrivateMessageExchange(string groupName, string userId)
     {
-        bool existExchangeUser = ExchangeExistUser(userId);
-        ExchangeEventSSE ExchangeIndex = ExchangesPrivates.FirstOrDefault(Exchanges => Exchanges.UserID == userId);
-        bool existExchangeUserGroup = ExchangesPrivates.Exists(Exchanges => Exchanges.UserID == userId && Exchanges.GroupNames.Contains(groupName));
-        NotificationSignal.NotificationSignal notificationSignal = new NotificationSignal.NotificationSignal();
+        bool existExchangeUser = ExchangeExistPrivate(userId);
+        ConsumeEventSSE exchangeIndex = exchangesPrivate.FirstOrDefault(Exchanges => Exchanges.UserID == userId);
+        bool existExchangeUserGroup = exchangesPrivate.Exists(Exchanges => Exchanges.UserID == userId && Exchanges.GroupNames.Contains(groupName));
 
         if (existExchangeUserGroup == false)
         {
             Action<object, string> messageReceivedHandlerPrivate = async (sender, message) =>
             {
-                Console.WriteLine($"{message} {userId} SSE private");
                 Payload messageObject = JsonConvert.DeserializeObject<Payload>(message);
-
-                if (userId == messageObject.To && messageObject.Exchange == groupName)
+                if (userId == messageObject.to && messageObject.exchange == groupName)
                 {
                     notificationSignal.NotifyASignalRPrivate(groupName,userId, message);
                 }
             };
 
-            queueService.SubscribeToMessageReceived(messageReceivedHandlerPrivate);
-            ExchangeIndex.GroupNames.Add(groupName);
-            ExchangeIndex.ExchangeEvents.Add(messageReceivedHandlerPrivate);
+            queueService.SubscribeToMessage(messageReceivedHandlerPrivate);
+            exchangeIndex.ExchangeEvents.Add(
+                new ConsumeEvent {
+                    EventMessage = messageReceivedHandlerPrivate, 
+                    QueueName = $"{groupName}{userId}"
+                    }
+                );
+            exchangeIndex.GroupNames.Add(groupName);
 
             if (Enum.TryParse(groupName, out ExchangeTypes valueEnum))
             {
-                Console.WriteLine($"El valor enum es: {valueEnum}");
-                var message = queueService.ConsumeMessage(valueEnum);
+                queueService.ConsumeMessage(valueEnum, userId);
             }
             else
             {
@@ -159,36 +193,31 @@ public class SSEHub : Hub
 
     public async Task SubsMessageToGroupExchange(string groupName)
     {
-        var ExchangeIndex = ExchangeExist(Context.ConnectionId, groupName);
-        NotificationSignal.NotificationSignal notificationSignal = new NotificationSignal.NotificationSignal();
-
+        ExchangeExist(Context.ConnectionId, groupName);
         if (!messageGropusReceivedHandlers.ContainsKey(groupName))
         {
             Action<object, string> messageReceivedHandler = async (sender, message) =>
             {
                 Payload messageObject = JsonConvert.DeserializeObject<Payload>(message);
-                if (messageObject.Exchange == groupName)
+                if (messageObject.exchange == groupName && string.IsNullOrEmpty(messageObject.to))
                 {
                     Console.WriteLine($"{message} {groupName} SSE grupo");
                     notificationSignal.NotifyASignalRGroup(groupName, message);
                 }
             };
 
-            queueService.SubscribeToMessageReceived(messageReceivedHandler);
+            queueService.SubscribeToMessage(messageReceivedHandler);
             messageGropusReceivedHandlers[groupName] = messageReceivedHandler;
-
 
             if (Enum.TryParse(groupName, out ExchangeTypes valueEnum))
             {
-                Console.WriteLine($"El valor enum es: {valueEnum}");
-                var message = queueService.ConsumeMessage(valueEnum);
+                queueService.ConsumeMessage(valueEnum,"");
             }
             else
             {
                 Console.WriteLine("El string no coincide con ningún valor enum.");
             }
         }
-
     }
 
 }

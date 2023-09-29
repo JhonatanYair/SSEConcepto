@@ -12,7 +12,6 @@ namespace ServerSignal.NotificationSignal
 
         public async Task NotifyASignalRGroup(string groupName, string mensaje)
         {
-
             var hubConnection = new HubConnectionBuilder()
             .WithUrl(signalUrl)
             .Build();

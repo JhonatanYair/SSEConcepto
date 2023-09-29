@@ -13,7 +13,8 @@ namespace Queues.RabbitMQ
     {
         private IConnection connection;
         private IModel channel;
-        public event EventHandler<string> MessageReceived;
+        public event EventHandler<string> messageReceived;
+        private Dictionary<string, string> activeConsumers = new Dictionary<string, string>();
 
         public RabbitMQService()
         {
@@ -33,55 +34,51 @@ namespace Queues.RabbitMQ
             channel = connection.CreateModel();
         }
 
-        public void DeclareQueue(ExchangeTypes exchange)
+        public void DeclareQueue(ExchangeTypes exchange, string toDestination)
         {
             string exchangeName = exchange.ToString();
-            string queueName = exchange.ToString();
-
+            string queueName = $"{exchange.ToString()}{toDestination}";
             channel.ExchangeDeclare(exchangeName, ExchangeType.Direct);
-            // Declarar una cola para el ServicioA
             channel.QueueDeclare(queueName, durable: false, exclusive: false, autoDelete: false, arguments: null);
-            // Vincular la cola al exchange para el ServicioA
-            channel.QueueBind(queue: queueName, exchange: exchangeName, routingKey: "");
+            channel.QueueBind(queue: queueName, exchange: exchangeName, routingKey: queueName);
         }
 
         public void PublishMessage(ExchangeTypes exchange, PayloadDTO message)
         {
             var properties = channel.CreateBasicProperties();
-
-            // Asignar el tracking ID a la cabecera del mensaje
             properties.Headers = new Dictionary<string, object>
             {
-                { "TrackingId", message.tracking.ToString() }
+                { "Tracking", message.tracking.ToString() }
             };
 
             var payloadMessage = new Payload
             {
-                Data = message.Data,
-                DateCreate = DateTime.Now,
-                EventType = message.EventType.ToString(),
-                From = message.From,
-                Exchange = message.Exchange.ToString(),
-                To = message.To,
+                data = message.data,
+                creationDate = DateTime.Now,
+                eventType = message.eventType.ToString(),
+                from = message.from,
+                exchange = message.exchange.ToString(),
+                to = message.to,
                 tracking = message.tracking,
             };
 
+            DeclareQueue(exchange, message.to);
             string exchangeName = exchange.ToString();
-            DeclareQueue(exchange);
+            string queueName = $"{exchangeName}{message.to}";
             string messageText = JsonConvert.SerializeObject(payloadMessage);
             var body = Encoding.UTF8.GetBytes(messageText);
-            channel.BasicPublish(exchange: exchangeName, routingKey: "", basicProperties: properties, body: body);
+            channel.BasicPublish(exchange: exchangeName, routingKey: queueName, basicProperties: properties, body: body);
         }
 
-        public string ConsumeMessage(ExchangeTypes exchange)
+        public void ConsumeMessage(ExchangeTypes exchange, string toDestination)
         {
             string message = null;
             string trackingId = null;
             string exchangeName = exchange.ToString();
-            string queueName = exchange.ToString();
+            string queueName = $"{exchangeName}{toDestination}";
 
             var messageCompletionSource = new TaskCompletionSource<string>();
-            DeclareQueue(exchange);
+            DeclareQueue(exchange, toDestination);
 
             var consumer = new EventingBasicConsumer(channel);
             consumer.Received += (model, ea) =>
@@ -91,10 +88,8 @@ namespace Queues.RabbitMQ
                 OnMessageReceived(message);
             };
 
-            channel.BasicConsume(queue: queueName, autoAck: true, consumer: consumer);
-            Console.WriteLine();
-
-            return message;
+            var consumerTag = channel.BasicConsume(queue: queueName, autoAck: true, consumer: consumer);
+            activeConsumers[queueName] = consumerTag;
 
         }
 
@@ -104,15 +99,22 @@ namespace Queues.RabbitMQ
             return (int)queueDeclareOk.MessageCount;
         }
 
+        public void StopConsumer(string queueName)
+        {
+            var consumerTag = activeConsumers[queueName];
+            channel.BasicCancel(consumerTag);
+        }
+
         public void Dispose()
         {
             channel.Close();
             connection.Close();
         }
 
+
         protected virtual void OnMessageReceived(string message)
         {
-            MessageReceived?.Invoke(this, message);
+            messageReceived?.Invoke(this, message);
         }
 
     }

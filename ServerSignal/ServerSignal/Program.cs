@@ -28,9 +28,6 @@ builder.Services.AddCors(options =>
         });
 });
 
-string hostIpAddress = System.Net.Dns.GetHostEntry(System.Net.Dns.GetHostName()).AddressList.FirstOrDefault(ip => ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)?.ToString();
-Console.WriteLine(hostIpAddress);
-
 var app = builder.Build();
 
 // Configure el pipeline de solicitud HTTP.
@@ -43,7 +40,7 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseCors();
 
-app.UseRouting(); // Agregar UseRouting antes de UseEndpoints
+app.UseRouting();
 
 app.UseAuthorization();
 

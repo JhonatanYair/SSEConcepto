@@ -9,9 +9,9 @@ namespace Queues.AbstracionLayer
 {
     public interface IQueueService
     {
-        void DeclareQueue(ExchangeTypes exchange);
+        void DeclareQueue(ExchangeTypes exchange, string subName);
         void PublishMessage(ExchangeTypes exchange, PayloadDTO message);
-        string ConsumeMessage(ExchangeTypes exchange);
+        void ConsumeMessage(ExchangeTypes exchange, string subName);
         int GetMessageCount(string queueName);
     }
 }
