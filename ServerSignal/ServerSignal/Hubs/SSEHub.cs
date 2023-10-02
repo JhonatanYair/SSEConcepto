@@ -1,4 +1,6 @@
-﻿using Microsoft.AspNetCore.SignalR;
+﻿using log4net;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Queues.AbstracionLayer;
 using Queues.AbstracionLayer.Enums;
@@ -13,6 +15,7 @@ public class SSEHub : Hub
     private Dictionary<string, Action<object, string>> messageGropusReceivedHandlers = new Dictionary<string, Action<object, string>>();
     private List<ConsumeEventSSE> exchangesPrivate = new List<ConsumeEventSSE>();
     private List<ConsumeEventSSE> exchanges = new List<ConsumeEventSSE>();
+    private static readonly ILog _logger = LogManager.GetLogger(typeof(SSEHub));
 
     public SSEHub(QueueServiceBase _queueService)
     {
@@ -25,20 +28,24 @@ public class SSEHub : Hub
         await base.OnConnectedAsync();
     }
 
-    public override async Task OnDisconnectedAsync(Exception exception)
+    public override async Task OnDisconnectedAsync()
     {
         await UnsubscribeClient(Context.ConnectionId);
         await base.OnDisconnectedAsync(exception);
     }
 
+ 
     public async Task UnsubscribeClient(string connectionID)
     {
         var indexExcPriva = exchangesPrivate.FirstOrDefault(Exchange => Exchange.ConnetionID == connectionID);
         if (indexExcPriva != null)
         {
-            foreach (var eventS in indexExcPriva.ExchangeEvents)
+            if (queueService.IsQueueInitialized == true)
             {
-                queueService.UnsubscribeFromMessage(eventS.EventMessage,eventS.QueueName);
+                foreach (var eventS in indexExcPriva.ExchangeEvents)
+                {
+                    queueService.UnsubscribeFromMessage(eventS.EventMessage, eventS.QueueName);
+                }
             }
             exchangesPrivate.Remove(indexExcPriva);
         }
@@ -61,8 +68,11 @@ public class SSEHub : Hub
             if (existEvent == false)
             {
                 var eventGroup = messageGropusReceivedHandlers[groupName];
-                queueService.UnsubscribeFromMessage(eventGroup, groupName);
                 messageGropusReceivedHandlers.Remove(groupName);
+                if (queueService.IsQueueInitialized == true)
+                {
+                    queueService.UnsubscribeFromMessage(eventGroup, groupName);
+                }
             }
         }
     }
@@ -164,10 +174,11 @@ public class SSEHub : Hub
         {
             Action<object, string> messageReceivedHandlerPrivate = async (sender, message) =>
             {
+                _logger.Debug($"{message} {groupName} {userId} SSE private");
                 Payload messageObject = JsonConvert.DeserializeObject<Payload>(message);
                 if (userId == messageObject.to && messageObject.exchange == groupName)
                 {
-                    notificationSignal.NotifyASignalRPrivate(groupName,userId, message);
+                    await notificationSignal.NotifyASignalRPrivate(groupName,userId, message);
                 }
             };
 
@@ -186,7 +197,7 @@ public class SSEHub : Hub
             }
             else
             {
-                Console.WriteLine("El string no coincide con ningún valor enum.");
+                _logger.Warn("The string does not match any enum value.");
             }
         }
     }
@@ -201,7 +212,7 @@ public class SSEHub : Hub
                 Payload messageObject = JsonConvert.DeserializeObject<Payload>(message);
                 if (messageObject.exchange == groupName && string.IsNullOrEmpty(messageObject.to))
                 {
-                    Console.WriteLine($"{message} {groupName} SSE grupo");
+                    _logger.Debug($"{message} {groupName} SSE grupo");
                     notificationSignal.NotifyASignalRGroup(groupName, message);
                 }
             };
@@ -215,7 +226,7 @@ public class SSEHub : Hub
             }
             else
             {
-                Console.WriteLine("El string no coincide con ningún valor enum.");
+                _logger.Warn("The string does not match any enum value.");
             }
         }
     }

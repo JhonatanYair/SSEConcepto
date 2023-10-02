@@ -19,8 +19,8 @@ services:
       timeout: 5s
       retries: 3
     networks:
-      mynetwork: # Asigna el contenedor a una red personalizada
-        ipv4_address: 172.20.0.2 # Configura la dirección IP específica para el contenedor
+      mynetwork:
+        ipv4_address: 172.20.0.2
 
   clientesse:
     image: nginx:latest
@@ -31,8 +31,8 @@ services:
     volumes:
       - ./ClienteSSE:/usr/share/nginx/html
     networks:
-      mynetwork: # Asigna el contenedor a la misma red personalizada
-        ipv4_address: 172.20.0.3 # Configura una dirección IP específica para este contenedor
+      mynetwork:
+        ipv4_address: 172.20.0.3
 
   producermessage:
     build:
@@ -49,8 +49,8 @@ services:
        rabbitmq:
         condition: service_healthy
     networks:
-      mynetwork: # Asigna el contenedor a la misma red personalizada
-        ipv4_address: 172.20.0.4 # Configura una dirección IP específica para este contenedor
+      mynetwork:
+        ipv4_address: 172.20.0.4
 
   serversignal:
     build:
@@ -68,12 +68,12 @@ services:
        rabbitmq:
         condition: service_healthy
     networks:
-      mynetwork: # Asigna el contenedor a la misma red personalizada
-        ipv4_address: 172.20.0.5 # Configura una dirección IP específica para este contenedor
+      mynetwork:
+        ipv4_address: 172.20.0.5
 
 networks:
   mynetwork:
     ipam:
       driver: default
       config:
-        - subnet: 172.20.0.0/16 # Define la subred para la red personalizada
+        - subnet: 172.20.0.0/16

@@ -12,7 +12,7 @@ namespace Queues.RabbitMQ
     {
         public static IServiceCollection AddQueuesStreaming(this IServiceCollection services)
             => services
-                .AddSingleton<IQueueService, QueueServiceBase>();
-                //.AddSingleton<IQueueService, RabbitMQMessageQueueService>();
+                .AddSingleton<IQueueService, QueueServiceBase>()
+                .AddSingleton<QueueServiceBase, QueueServiceBase>();
     }
 }

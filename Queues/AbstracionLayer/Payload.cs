@@ -6,7 +6,7 @@ namespace Queues.AbstracionLayer
 {
     public class Payload
     {
-        public int event_id { get; set; }
+        public Guid event_id { get; set; }
         public Guid tracking { get; set; }
         public string from { get; set; }
         public string? to { get; set; }

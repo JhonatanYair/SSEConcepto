@@ -1,16 +1,17 @@
 ﻿using Queues.AbstracionLayer;
 using RabbitMQ.Client.Events;
 using RabbitMQ.Client;
-using System;
 using System.Text;
-using System.Threading.Tasks;
 using Queues.AbstracionLayer.Enums;
 using Newtonsoft.Json;
+using log4net;
 
 namespace Queues.RabbitMQ
 {
     public class RabbitMQService : IQueueService, IDisposable
     {
+
+        private static readonly ILog _logger = LogManager.GetLogger(typeof(RabbitMQService));
         private IConnection connection;
         private IModel channel;
         public event EventHandler<string> messageReceived;
@@ -26,8 +27,8 @@ namespace Queues.RabbitMQ
             {
                 HostName = rabbitMQHost,
                 Port = 5672,
-                UserName = rabbitMQUser, 
-                Password = rabbitMQPassword 
+                UserName = rabbitMQUser,
+                Password = rabbitMQPassword
             };
 
             connection = factory.CreateConnection();
@@ -37,7 +38,7 @@ namespace Queues.RabbitMQ
         public void DeclareQueue(ExchangeTypes exchange, string toDestination)
         {
             string exchangeName = exchange.ToString();
-            string queueName = $"{exchange.ToString()}{toDestination}";
+            string queueName = $"{exchangeName}{toDestination}";
             channel.ExchangeDeclare(exchangeName, ExchangeType.Direct);
             channel.QueueDeclare(queueName, durable: false, exclusive: false, autoDelete: false, arguments: null);
             channel.QueueBind(queue: queueName, exchange: exchangeName, routingKey: queueName);
@@ -53,6 +54,7 @@ namespace Queues.RabbitMQ
 
             var payloadMessage = new Payload
             {
+                event_id = Guid.NewGuid(),
                 data = message.data,
                 creationDate = DateTime.Now,
                 eventType = message.eventType.ToString(),
@@ -72,8 +74,8 @@ namespace Queues.RabbitMQ
 
         public void ConsumeMessage(ExchangeTypes exchange, string toDestination)
         {
-            string message = null;
-            string trackingId = null;
+            string message = "";
+            string trackingId = "";
             string exchangeName = exchange.ToString();
             string queueName = $"{exchangeName}{toDestination}";
 
@@ -84,13 +86,11 @@ namespace Queues.RabbitMQ
             consumer.Received += (model, ea) =>
             {
                 message = Encoding.UTF8.GetString(ea.Body.ToArray());
-                //trackingId = ea.BasicProperties.Headers["TrackingId"].ToString();
-                OnMessageReceived(message);
+                OnMessageReceived(message);                
             };
 
             var consumerTag = channel.BasicConsume(queue: queueName, autoAck: true, consumer: consumer);
             activeConsumers[queueName] = consumerTag;
-
         }
 
         public int GetMessageCount(string queueName)
